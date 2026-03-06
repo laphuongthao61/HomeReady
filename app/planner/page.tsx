@@ -127,7 +127,7 @@ export default function PlannerPage() {
             label="Property price (VND)"
             type="number"
             value={presentPrice}
-            onChange={setPresentPrice}
+            onChange={(value) => setPresentPrice(Number(value))}
             min={100000000}
             step={100000000}
           />
@@ -135,7 +135,7 @@ export default function PlannerPage() {
             label="Current savings (VND)"
             type="number"
             value={currentSavings}
-            onChange={setCurrentSavings}
+            onChange={(value) => setCurrentSavings(Number(value))}
             min={0}
             step={10000000}
           />
@@ -143,8 +143,8 @@ export default function PlannerPage() {
             label="Down payment %"
             type="number"
             value={downPaymentPct}
-            onChange={(v) => setDownPaymentPct(Number(v))}
-            min={0.1}
+            onChange={(value) => setDownPaymentPct(Number(value))}
+              min={0.1}
             max={0.5}
             step={0.05}
           />
