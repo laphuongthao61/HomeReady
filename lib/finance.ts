@@ -9,6 +9,32 @@ import {
 
 export type { City, PropertyType };
 
+// --- Money helpers ---
+export function parseMoneyInput(value: string): number {
+  if (!value) return 0;
+  const cleaned = value.replace(/[^\d]/g, "");
+  if (!cleaned) return 0;
+  return Number(cleaned) || 0;
+}
+
+export function formatMoneyInput(value: number): string {
+  if (!value || !Number.isFinite(value)) return "";
+  const rounded = Math.round(value);
+  return rounded
+    .toLocaleString("fr-FR")
+    .replace(/\u202f/g, " ")
+    .replace(/\xa0/g, " ");
+}
+
+export function formatVnd(value: number): string {
+  const rounded = Math.round(value || 0);
+  const formatted = rounded
+    .toLocaleString("fr-FR")
+    .replace(/\u202f/g, " ")
+    .replace(/\xa0/g, " ");
+  return `${formatted} đ`;
+}
+
 export function calcUpfrontAmt(
   presentPrice: number,
   downPct: number
@@ -16,11 +42,50 @@ export function calcUpfrontAmt(
   return presentPrice * (downPct + FEES.legalAndTaxPct);
 }
 
-export function getGrowthRate(
-  city: City,
-  propertyType: PropertyType
-): number {
-  return GROWTH_RATES[city][propertyType];
+export function getGrowthRate(city: string, propertyType: string): number {
+  const normalize = (value: string) =>
+    value.toLowerCase().trim().replace(/\s+/g, " ");
+
+  const cityKey = normalize(city);
+  const typeKey = normalize(propertyType);
+
+  const cityMap: Record<string, City> = {
+    hanoi: "Hanoi",
+    hcm: "HCM",
+    "ho chi minh city": "HCM",
+    danang: "DaNang",
+    "da nang": "DaNang",
+  };
+
+  const typeMap: Record<string, PropertyType> = {
+    apartment: "Apartment",
+    "ground house": "GroundHouse",
+    groundhouse: "GroundHouse",
+  };
+
+  const mappedCity = cityMap[cityKey];
+  const mappedType = typeMap[typeKey];
+
+  if (!mappedCity || !mappedType) {
+    console.warn("Unknown city or property type for growth rate", {
+      city,
+      propertyType,
+    });
+    // Fallback: conservative default growth rate
+    return 0.06;
+  }
+
+  const rate = GROWTH_RATES[mappedCity]?.[mappedType];
+
+  if (typeof rate !== "number") {
+    console.warn("Missing growth rate for city/type", {
+      city: mappedCity,
+      propertyType: mappedType,
+    });
+    return 0.06;
+  }
+
+  return rate;
 }
 
 export function calcFuturePrice(
@@ -273,9 +338,4 @@ export function buildBatdongsanUrl(
   _type: string
 ): string {
   return "https://batdongsan.com.vn";
-}
-
-// --- formatVnd ---
-export function formatVnd(value: number): string {
-  return value.toLocaleString("vi-VN") + " ₫";
 }

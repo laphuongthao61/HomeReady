@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Stepper from "@/components/Stepper";
 import FormField from "@/components/FormField";
 import ResultCard from "@/components/ResultCard";
+import { listings } from "@/lib/data";
 import {
   downPaymentCheck,
   savingsPlan,
@@ -11,6 +12,8 @@ import {
   mortgageCalculation,
   buildBatdongsanUrl,
   formatVnd,
+  parseMoneyInput,
+  formatMoneyInput,
   type City,
   type PropertyType,
 } from "@/lib/finance";
@@ -22,6 +25,12 @@ export default function PlannerPage() {
   const [presentPrice, setPresentPrice] = useState(3000000000);
   const [currentSavings, setCurrentSavings] = useState(500000000);
   const [downPaymentPct, setDownPaymentPct] = useState(0.2);
+  const [presentPriceInput, setPresentPriceInput] = useState(
+    formatMoneyInput(3000000000)
+  );
+  const [currentSavingsInput, setCurrentSavingsInput] = useState(
+    formatMoneyInput(500000000)
+  );
 
   // Step 1.2 (Scenario B)
   const [numYears, setNumYears] = useState(5);
@@ -35,6 +44,51 @@ export default function PlannerPage() {
   const [termYears, setTermYears] = useState(20);
   const [expense, setExpense] = useState(10000000);
   const [income, setIncome] = useState(30000000);
+  const [expenseInput, setExpenseInput] = useState(
+    formatMoneyInput(10000000)
+  );
+  const [incomeInput, setIncomeInput] = useState(
+    formatMoneyInput(30000000)
+  );
+
+  // Shared: selected property for calculations
+  const [selectedListingId, setSelectedListingId] = useState<string>("");
+
+  const normalizeKey = (value: string) =>
+    value.toLowerCase().trim().replace(/\s+/g, " ");
+
+  const matchingListings = useMemo(
+    () =>
+      listings.filter(
+        (l) =>
+          normalizeKey(l.city) === normalizeKey(city) &&
+          normalizeKey(l.propertyType) === normalizeKey(propertyType)
+      ),
+    [city, propertyType]
+  );
+
+  // Auto-select property when there is an obvious choice
+  useEffect(() => {
+    if (matchingListings.length === 1) {
+      setSelectedListingId(matchingListings[0].id);
+    } else if (
+      matchingListings.length > 1 &&
+      !matchingListings.some((l) => l.id === selectedListingId)
+    ) {
+      // Consistently pick the first when none selected or previous selection no longer valid
+      setSelectedListingId(matchingListings[0].id);
+    } else if (matchingListings.length === 0) {
+      setSelectedListingId("");
+    }
+  }, [matchingListings, selectedListingId]);
+
+  // When a property is selected, use its price as the base presentPrice
+  useEffect(() => {
+    const selected = matchingListings.find((l) => l.id === selectedListingId);
+    if (!selected) return;
+    setPresentPrice(selected.priceVnd);
+    setPresentPriceInput(formatMoneyInput(selected.priceVnd));
+  }, [matchingListings, selectedListingId]);
 
   const dpResult = downPaymentCheck({
     presentPrice,
@@ -123,22 +177,48 @@ export default function PlannerPage() {
       {/* Step 0: Down Payment Check */}
       {step === 0 && (
         <div className="space-y-6">
-          <FormField
-            label="Property price (VND)"
-            type="number"
-            value={presentPrice}
-            onChange={(value) => setPresentPrice(Number(value))}
-            min={100000000}
-            step={100000000}
-          />
-          <FormField
-            label="Current savings (VND)"
-            type="number"
-            value={currentSavings}
-            onChange={(value) => setCurrentSavings(Number(value))}
-            min={0}
-            step={10000000}
-          />
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Property price (VND)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={presentPriceInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const numeric = parseMoneyInput(raw);
+                  setPresentPrice(numeric);
+                  setPresentPriceInput(
+                    raw === "" ? "" : formatMoneyInput(numeric)
+                  );
+                }}
+                placeholder="e.g. 3 000 000 000"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Current savings (VND)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={currentSavingsInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const numeric = parseMoneyInput(raw);
+                  setCurrentSavings(numeric);
+                  setCurrentSavingsInput(
+                    raw === "" ? "" : formatMoneyInput(numeric)
+                  );
+                }}
+                placeholder="e.g. 500 000 000"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              />
+            </div>
+          </div>
           <FormField
             label="Down payment %"
             type="number"
@@ -212,6 +292,31 @@ export default function PlannerPage() {
               { value: "Ground House", label: "Ground House" },
             ]}
           />
+
+          {matchingListings.length > 0 ? (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-700">
+                Select property
+              </label>
+              <select
+                value={selectedListingId}
+                onChange={(e) => setSelectedListingId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              >
+                {matchingListings.map((listing) => (
+                  <option key={listing.id} value={listing.id}>
+                    {listing.title} — {listing.district}, {listing.city} (
+                    {formatVnd(listing.priceVnd)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              No matching properties found for this city and type. Using your
+              custom property price instead.
+            </p>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-4">
             <ResultCard
@@ -340,22 +445,48 @@ export default function PlannerPage() {
             min={5}
             max={30}
           />
-          <FormField
-            label="Monthly expenses (VND)"
-            type="number"
-            value={expense}
-            onChange={(v) => setExpense(Number(v))}
-            min={0}
-            step={1000000}
-          />
-          <FormField
-            label="Monthly income (VND)"
-            type="number"
-            value={income}
-            onChange={(v) => setIncome(Number(v))}
-            min={0}
-            step={1000000}
-          />
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Monthly expenses (VND)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={expenseInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const numeric = parseMoneyInput(raw);
+                  setExpense(numeric);
+                  setExpenseInput(
+                    raw === "" ? "" : formatMoneyInput(numeric)
+                  );
+                }}
+                placeholder="e.g. 10 000 000"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Monthly income (VND)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={incomeInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const numeric = parseMoneyInput(raw);
+                  setIncome(numeric);
+                  setIncomeInput(
+                    raw === "" ? "" : formatMoneyInput(numeric)
+                  );
+                }}
+                placeholder="e.g. 30 000 000"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              />
+            </div>
+          </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
             <ResultCard
